@@ -349,11 +349,19 @@ def rasterize_road_and_bldg(
     #                 breakpoint()
 
 
-def grayscale_rasterize_road_graph(lat_deg, lng_deg, out_dir_root=Path('./temp'),
-                              **kwargs) -> Graph:
+def single_rasterize_road_graph(
+        center: Optional[Tuple[float, float]]=None, #(lat_deg, lng_deg)
+        zoom: int=14,
+        tileXYZ: Optional[Tuple[int, int, int]]=None,
+        bgcolor='w',
+        edge_color='k',
+        save: bool=True,
+        out_dir_root=Path('./temp'),
+        **kwargs,
+)-> Graph:
     # Query location
-    center = (lat_deg, lng_deg)
-    x, y, z = getTileFromGeo(lat_deg, lng_deg, 14)
+    lat_deg, lng_deg = center
+    x, y, z = getTileFromGeo(lat_deg, lng_deg, zoom)
     extent, _ = getTileExtent(x, y, z)
     radius = extent // 2  # meters
     network_type = "drive_service"
@@ -364,21 +372,22 @@ def grayscale_rasterize_road_graph(lat_deg, lng_deg, out_dir_root=Path('./temp')
     lw_factors = [0.5, 1.0]
 
     # Get OSM road network as a graph
-    G_r = None
+    G_r, bbox = None, None
     try:
         G_r = ox.graph_from_point(center, dist=radius, dist_type='bbox', network_type=network_type)
+        bbox = ox.utils_geo.bbox_from_point(center, dist=radius)
     except:
         print(f"{x, y, z} -- Road error:", sys.exc_info()[0])
 
 
     if G_r is not None:
         rasterize_road_graph(G_r,
-                             (x, y, z),
-                             dist=radius,
+                             tileXYZ=(x, y, z),
+                             bbox=bbox,
                              bgcolors=bgcolors,
                              edge_colors=edge_colors,
                              lw_factors=lw_factors,
-                             save=True,
+                             save=save,
                              out_dir_root=out_dir_root,
                              **kwargs
                              )
@@ -386,7 +395,7 @@ def grayscale_rasterize_road_graph(lat_deg, lng_deg, out_dir_root=Path('./temp')
     return G_r
 
 
-def grayscale_rasterize_road_and_bldg(
+def single_rasterize_road_and_bldg(
         center: Optional[Tuple[float, float]]=None, #(lat_deg, lng_deg)
         zoom: int=14,
         tileXYZ: Optional[Tuple[int, int, int]]=None,
@@ -435,8 +444,8 @@ def grayscale_rasterize_road_and_bldg(
     network_type = "drive_service"
 
     # debug
-    print('grayscale_rasterize_road_bldg -- x,y,z: ', x,y,z)
-    print('grayscale_rasterize_road_bldg -- lat, lng: ', lat_deg, lng_deg)
+    print('single_rasterize_road_bldg -- x,y,z: ', x,y,z)
+    print('single_rasterize_road_bldg -- lat, lng: ', lat_deg, lng_deg)
     print()
 
     # Specify style parameters
@@ -456,7 +465,7 @@ def grayscale_rasterize_road_and_bldg(
     try:
         gdf_b = ox.geometries_from_point(center, tags={'building': True}, dist=radius)
         bbox = ox.utils_geo.bbox_from_point(center, dist=radius)
-        print("grayscale_rasterize_road_bldg -- bbox: ", bbox)
+        print("single_rasterize_road_bldg -- bbox: ", bbox)
     except:
         print(f"{x, y, z} -- Bldg retrieval error:", sys.exc_info()[0])
 
@@ -472,7 +481,7 @@ def grayscale_rasterize_road_and_bldg(
         save=save,
         out_dir_root=out_dir_root,
         **kwargs
-    ) 
+    )
 
     return G_r, gdf_b
 
