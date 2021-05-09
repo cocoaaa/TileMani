@@ -6,6 +6,7 @@ from osmnx.plot import utils_graph, graph, simplification, utils_geo, plot_graph
 import geopandas as gpd
 from networkx.classes.graph import Graph
 
+from src.retrieve.retriever import get_road_graph_and_bbox
 from src.utils.geo import getGeoFromTile, getTileFromGeo, getTileExtent
 
 def plot_figure_ground(
@@ -19,8 +20,20 @@ def plot_figure_ground(
     smooth_joints=True,
     **pg_kwargs,
 ):
-    """
-    Plot a figure-ground diagram of a street network.
+    """Plot a figure-ground diagram of a street network.
+    Allows to pass in the `bbox` of the POI and use this bbox to select the
+    area to plot the figure-ground of the graph.
+    Ths different from `osmnx.plot_figure_ground`, which uses the input of `distance (dist)`
+    and internally computed centroid of the graph, to select the area to plot the
+    figure-ground. This implementation results in the coverage of the figure-ground
+    to be incongruent to the bbox, if the user already has a set bbox that must be exactly
+    the coverage of the resulted figure-ground.
+    This modification keeps that contract of bbox to be met.
+
+    so that the face_color
+    of an initiated plt.Axes correctly is adjusted to the input parameter
+    bg_color of this function.
+
     Parameters
     ----------
     G : networkx.MultiDiGraph
@@ -60,14 +73,6 @@ def plot_figure_ground(
             "track": 1.5,
             "motorway": 6,
         }
-
-    # if G was passed in, plot it centered on its node centroid
-    if G is not None:
-        gdf_nodes = utils_graph.graph_to_gdfs(G, edges=False, node_geometry=True)
-        lnglat_point = gdf_nodes.unary_union.centroid.coords[0]
-        point = tuple(reversed(lnglat_point))
-
-
 
     # we need an undirected graph to find every edge incident on a node
     Gu = utils_graph.get_undirected(G)
@@ -238,12 +243,12 @@ def rasterize_road_and_bldg(
         out_dir_root: Path,
         suffix: str = '.png',  # Note: Do include a dot
         dpi=50,
-        verbose=True,
+        verbose=False,
         show: bool = True,
         show_only_once: bool = True,
         figsize: Tuple[int, int] = (7, 7),
         street_widths: Dict[str, float] = None,
-):
+) -> None:
     """Rasterize the given graph of road networks (G_r) and (if save) save to
     `out_dir_root`/f'OSMnxR-{bgcolor}-{edge_color}-{lw_factor}' directory.
     Do this for all possible (distinct) combinations of style parameters,
@@ -300,11 +305,11 @@ def rasterize_road_and_bldg(
                     # Scale the edge widths of each street type
                     lw = {k: v * lw_factor for (k, v) in street_widths.items()}
 
-                    style_name = f'OSMnxR-{bgcolor}-{edge_color}-{lw_factor}'
-                    fp = out_dir_root / style_name / str(z)/ filename
-
-                    # Plot road network
+                    style_name, fp = '', ''
+                    # 1. Plot road network
                     if G is not None:
+                        style_name = f'OSMnxR-{bgcolor}-{edge_color}-{lw_factor}'
+                        fp = out_dir_root / style_name / str(z) / filename
                         f, ax = plot_figure_ground(
                             G,
                             bbox=bbox,
@@ -319,12 +324,34 @@ def rasterize_road_and_bldg(
                             filepath=fp,
                             dpi=dpi,
                         )
+                        if verbose:
+                            print('\tSaved ROAD to: ', fp)
+
                     else:
                         ax = None
                         print('\tNo road network is plotted/saved: ', x, y, z)
 
-                    # Plot bldg footprints
-                    if gdf_b is not None:
+                    # 2.  Plot bldg footprints
+                    if gdf_b is not None and not gdf_b.empty:
+                        # (a) Plot only bldg footprints
+                        style_name = f'OSMnxB-{bgcolor}-{bldg_color}-{lw_factor}'
+                        fp = out_dir_root / style_name / str(z) / filename
+                        _ = ox.plot_footprints(
+                            gdf_b,
+                            figsize=figsize,
+                            color=bldg_color,
+                            bgcolor=bgcolor,
+                            bbox=bbox,
+                            show=show,
+                            close=True,
+                            save=save,
+                            filepath=fp,
+                            dpi=dpi,
+                        )
+                        if verbose:
+                            print('\tSaved BLDG to: ', fp)
+
+                        # (b) Plot bldg footprints, on top of the road-graph image
                         style_name = f'OSMnxRB-{bgcolor}-{edge_color}-{bldg_color}-{lw_factor}'
                         fp = out_dir_root / style_name / str(z)/ filename
                         f, ax = ox.plot_footprints(
@@ -340,6 +367,9 @@ def rasterize_road_and_bldg(
                             filepath=fp,
                             dpi=dpi,
                         )
+                        if verbose:
+                            print('\tSaved BLDG and ROAD to: ', fp)
+
                     else:
                         print('\tNo bldg footprint is plotted/saved: ', x, y, z)
 
@@ -350,70 +380,55 @@ def rasterize_road_and_bldg(
 
 
 def single_rasterize_road_graph(
-        center: Optional[Tuple[float, float]]=None, #(lat_deg, lng_deg)
-        zoom: int=14,
-        tileXYZ: Optional[Tuple[int, int, int]]=None,
+        G: Optional[Graph],
+        tileXYZ: Tuple[int, int, int],
+        bbox: Tuple[float],
         bgcolor='w',
         edge_color='k',
+        lw_factor: float=1.0,
         save: bool=True,
         out_dir_root=Path('./temp'),
         **kwargs,
-)-> Graph:
-    # Query location
-    lat_deg, lng_deg = center
-    x, y, z = getTileFromGeo(lat_deg, lng_deg, zoom)
-    extent, _ = getTileExtent(x, y, z)
-    radius = extent // 2  # meters
-    network_type = "drive_service"
-
-    # Specify style parameters
-    bgcolors = ['w']  # ['#ffffff']
-    edge_colors = ['k']  # ['#111111']
-    lw_factors = [0.5, 1.0]
-
-    # Get OSM road network as a graph
-    G_r, bbox = None, None
-    try:
-        G_r = ox.graph_from_point(center, dist=radius, dist_type='bbox', network_type=network_type)
-        bbox = ox.utils_geo.bbox_from_point(center, dist=radius)
-    except:
-        print(f"{x, y, z} -- Road error:", sys.exc_info()[0])
-
-
-    if G_r is not None:
-        rasterize_road_graph(G_r,
-                             tileXYZ=(x, y, z),
-                             bbox=bbox,
-                             bgcolors=bgcolors,
-                             edge_colors=edge_colors,
-                             lw_factors=lw_factors,
-                             save=save,
-                             out_dir_root=out_dir_root,
-                             **kwargs
-                             )
-
-    return G_r
+) -> None:
+    if G is None:
+        print("Graph is None. Returning... ")
+        return
+    bgcolors = [bgcolor]
+    edge_colors = [edge_color]
+    lw_factors = [lw_factor]
+    rasterize_road_graph(G,
+                         tileXYZ=tileXYZ,
+                         bbox=bbox,
+                         bgcolors=bgcolors,
+                         edge_colors=edge_colors,
+                         lw_factors=lw_factors,
+                         save=save,
+                         out_dir_root=out_dir_root,
+                         **kwargs
+                         )
+    return
 
 
 def single_rasterize_road_and_bldg(
-        center: Optional[Tuple[float, float]]=None, #(lat_deg, lng_deg)
-        zoom: int=14,
-        tileXYZ: Optional[Tuple[int, int, int]]=None,
+        G: Optional[Graph],
+        gdf_b: gpd.GeoDataFrame,
+        tileXYZ: Tuple[int, int, int],
+        bbox: Tuple[float],
         bgcolor='w',
         edge_color='k',
         bldg_color='silver',
+        lw_factor: float=1.0,
         save: bool=True,
         out_dir_root=Path('./temp'),
         **kwargs,
-)-> Tuple[Graph, gpd.GeoDataFrame]:
-    """Given the center location (either as (lat_deg, lng_deg) or as tileXYZ),
-    retrieve and rasterize the OSM road networks and the building footprints using a single style config:
+) -> None:
+    """Given the tile at `tileXYZ`, its retrieved OSM road networks `G` and
+    building footprints `gdf_b` rasterize (i) the road graph, (2) the road and bldg geoms,
+    using a single style of the following config:
     - bgcolor (Default: black)
     - edge_color (Default: white)
     - bldg_color (Default: silver)
-
-    If both (lat,lng) and tileXYZ are given, we use tileXYZ to extract the center location
-    in (lat,lng), and ignore the inputted (lat,lng)
+    - lw_factor (Default: 1.0)
 
     Args
     -----
@@ -421,68 +436,32 @@ def single_rasterize_road_and_bldg(
         - suffix: str
         - dpi: int
         - verbose: bool
-        - show
-        - figsize: default  (7,7)
+        - show: bool
+        - figsize: default (7,7)
         - street_widths: Dict[str,float[ = None
     """
-    # Query location
-    if (center is not None) and (tileXYZ is None):
-        lat_deg, lng_deg = center
-        x, y, z = getTileFromGeo(lat_deg, lng_deg, zoom)
-    elif (center is None) and (tileXYZ is not None):
-        x, y, z = tileXYZ
-        lat_deg, lng_deg = getGeoFromTile(x, y, z)
-        center = (lat_deg, lng_deg)
-    elif center is not None and tileXYZ is not None:
-        x, y, z = tileXYZ
-        lat_deg, lng_deg = getGeoFromTile(x, y, z)
-        center = (lat_deg, lng_deg)
-    else:
-        raise ValueError('One of center or tileXYZ must be given')
-    extent, _ = getTileExtent(x, y, z)
-    radius = extent // 2  # meters
-    network_type = "drive_service"
-
-    # debug
-    print('single_rasterize_road_bldg -- x,y,z: ', x,y,z)
-    print('single_rasterize_road_bldg -- lat, lng: ', lat_deg, lng_deg)
-    print()
+    verbose = kwargs.get('verbose', False)
+    # verbose -- todo: make this into a nice logger
+    if verbose:
+        print('single_rasterize_road_bldg -- x,y,z: ', tileXYZ)
 
     # Specify style parameters
     bgcolors = [bgcolor]
     edge_colors = [edge_color]
     bldg_colors = [bldg_color]
-    lw_factors = [0.5, 1.0]
+    lw_factors = [1.0]
 
-    # Get OSM road network as a graph
-    G_r = None
-    try:
-        G_r = ox.graph_from_point(center, dist=radius, dist_type='bbox', network_type=network_type)
-    except:
-        print(f"{x, y, z} -- Road retrieval error:", sys.exc_info()[0])
-    # Get OSM bldg geometris as GeoDataFrame
-    gdf_b, bbox = None, None
-    try:
-        gdf_b = ox.geometries_from_point(center, tags={'building': True}, dist=radius)
-        bbox = ox.utils_geo.bbox_from_point(center, dist=radius)
-        print("single_rasterize_road_bldg -- bbox: ", bbox)
-    except:
-        print(f"{x, y, z} -- Bldg retrieval error:", sys.exc_info()[0])
-
-    rasterize_road_and_bldg(
-        G_r,
-        gdf_b,
-        (x, y, z),
-        bbox,
-        bgcolors=bgcolors,
-        edge_colors=edge_colors,
-        bldg_colors=bldg_colors,
-        lw_factors=lw_factors,
-        save=save,
-        out_dir_root=out_dir_root,
-        **kwargs
-    )
-
-    return G_r, gdf_b
-
+    # Rasterize the road graph and the bldg footprints
+    rasterize_road_and_bldg(G,
+                         gdf_b,
+                         tileXYZ,
+                         bbox,
+                         bgcolors,
+                         edge_colors,
+                         bldg_colors,
+                         lw_factors,
+                         save=save,
+                         out_dir_root=out_dir_root,
+                         **kwargs)
+    return
 
