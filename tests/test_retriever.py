@@ -1,6 +1,6 @@
 import osmnx as ox
-from src.retrieve.retriever import get_road_graph_and_bbox
-from src.rasterize.rasterizer import plot_figure_ground
+from src.tilemani.retrieve.retriever import get_road_graph_and_bbox
+from src.tilemani.rasterize.rasterizer import plot_figure_ground
 
 def test_get_road_graph_and_bbox(tileXYZ):
     G_r, bbox = get_road_graph_and_bbox(tileXYZ)
