@@ -162,20 +162,22 @@ def retrieve_and_rasterize_locs_in_a_folder(
         show=False,  # True,
         show_only_once=False,
         verbose=False,  # True,
-        out_dir_root=None,
-        records_dir_root=Path('./records'),
-) -> Dict:
+        out_dir_root=Path('./temp/images'),
+        records_dir_root=Path('./temp/records'),
+) -> List[Dict]:
+    mkdir(out_dir_root)
+    mkdir(records_dir_root)
 
-    if out_dir_root is None:
-        out_dir_root = DATA_ROOT
-
-    img_dir = DATA_ROOT/city/style/ zoom
+    img_dir = DATA_ROOT / city / style / zoom
     if not img_dir.exists():
         raise ValueError(f"{img_dir} doesn't exist. Check the spelling and upper/lower case of city, style, zoom")
+    if verbose:
+        print(f"Image_dir: ", img_dir)
+    #     breakpoint() #debug
 
-    records = defaultdict(list)
-    done = False
-    for img_fp in img_dir.iterdir():
+    # list of each record of location (which is a dict)
+    records = []
+    for i, img_fp in enumerate(img_dir.iterdir()):
         if not img_fp.is_file(): continue
         record = parse_maptile_fp(img_fp)
         record['city'] = city
@@ -201,7 +203,7 @@ def retrieve_and_rasterize_locs_in_a_folder(
             bldg_colors,
             lw_factors=lw_factors,
             save=save,
-            out_dir_root = out_dir_root / city,
+            out_dir_root=out_dir_root / city,
             verbose=verbose,
             show=show,
             show_only_once=show_only_once,
@@ -225,29 +227,31 @@ def retrieve_and_rasterize_locs_in_a_folder(
         record['retrieved_road'] = G_r is not None
         record['retrieved_bldg'] = gdf_b is not None
 
-        # Save the graph (of roads) as Graphml file
         filename = f"{record['x']}_{record['y']}_{record['z']}"
-        fp = out_dir_root / city / 'RoadGraph' / f'{tileXYZ[-1]}' / f'{filename}.graphml'
-        if G_r is not None:
-            ox.save_graphml(G_r,
-                            filepath=fp)
-            if verbose:
-                print('\tSaved road graph as graphml: ', fp)
-
-        # Save the GeoDataFrame (for bldg data) as Geojson
-        fp = out_dir_root / city / 'BldgGeom' / f'{tileXYZ[-1]}' / f'{filename}.geojson'
-        if not fp.parent.exists():
-            fp.mkdir(parents=True)
-            print(f'Created {fp.parent}')
-
-        if gdf_b is not None and not gdf_b.empty:
-            try:
-                _gdf = gdf_b.apply(lambda c: c.astype(str) if c.name != "geometry" else c, axis=0)
-                _gdf.to_file(fp, driver='GeoJSON')
+        if save:
+            # Save the graph (of roads) as Graphml file
+            filename = f"{record['x']}_{record['y']}_{record['z']}"
+            fp = out_dir_root / city / 'RoadGraph' / f'{tileXYZ[-1]}' / f'{filename}.graphml'
+            if G_r is not None:
+                ox.save_graphml(G_r,
+                                filepath=fp)
                 if verbose:
-                    print('\tSaved BLDG Geopandas as geopackage: ', fp)
-            except:
-                print(f"\tFailed to save BLDG Geopandas as gpkg: ", sys.exc_info()[0])
+                    print('\tSaved road graph as graphml: ', fp)
+
+            # Save the GeoDataFrame (for bldg data) as Geojson
+            fp = out_dir_root / city / 'BldgGeom' / f'{tileXYZ[-1]}' / f'{filename}.geojson'
+            if not fp.parent.exists():
+                fp.mkdir(parents=True)
+                print(f'Created {fp.parent}')
+
+            if gdf_b is not None and not gdf_b.empty:
+                try:
+                    _gdf = gdf_b.apply(lambda c: c.astype(str) if c.name != "geometry" else c, axis=0)
+                    _gdf.to_file(fp, driver='GeoJSON')
+                    if verbose:
+                        print('\tSaved BLDG Geopandas as geopackage: ', fp)
+                except:
+                    print(f"\tFailed to save BLDG Geopandas as gpkg: ", sys.exc_info()[0])
 
         # Compute states from G_r, gdf_b and save to record dict
         if G_r is not None:
@@ -256,33 +260,25 @@ def retrieve_and_rasterize_locs_in_a_folder(
 
         # Write this location's record to a json file
         # todo: test this part -- see if each record is written as individual csv file
-        record_dir = out_dir_root / city / 'RoadStat'
-        mkdir(record_dir)
-        write_record(record, record_dir/f'{filename}.csv', verbose=verbose)
+        if save:
+            record_dir = out_dir_root / city / 'RoadStat'
+            mkdir(record_dir)
+            write_record(record, record_dir / f'{filename}.csv', verbose=verbose)
+
         # Append the record to records
-        records[city].append(record)
-        print(len(records[city]), end="...")
+        records.append(record)
+        print(len(records), end="...")
 
-    #             #Debug -- todo: remove
-    #             if len(records['city']) > 10:
-    #                 done = True
-    #                 breakpoint()
-
-        # Write the records to a file
-        mkdir(records_dir_root)
-
-        vidx = 0
-        # filename to store
+    # Write the final `records` to a file
+    vidx = 0
+    # filename to store
+    records_fn = f'{city}-{style}-{tileXYZ[-1]}-ver{vidx}.pkl'
+    while (records_dir_root / records_fn).exists():
+        vidx += 1
         records_fn = f'{city}-{style}-{tileXYZ[-1]}-ver{vidx}.pkl'
-        while (records_dir_root / records_fn).exists():
-            vidx += 1
-            records_fn = f'{city}-{style}-{tileXYZ[-1]}-ver{vidx}.pkl'
-            print(f'records file already exists --> Increased the version idx to {vidx}...')
-        joblib.dump(records[city], records_dir_root / records_fn)
-        print(f'\tSaved records for {city} to: {records_dir_root / records_fn}')
-
-    #         if done:#debug; todo: remove
-    #             break
+        print(f'records file already exists --> Increased the version idx to {vidx}...')
+    joblib.dump(records, records_dir_root / records_fn)
+    print(f'\tSaved the final records for {city} to: {records_dir_root / records_fn}')
 
     return records
 
@@ -298,10 +294,10 @@ if __name__ == "__main__":
                         help="<Optional> Zoom level")
     parser.add_argument("-nw", "--network_type", type=str, default='drive_service',
                         help="<Optional> Network type to query from OSM. Default: drive_service")
-    parser.add_argument("--out_dir_root", type=str, required=False,
-                        help="<Optional> Name of the output folder root. Default: same as DATA_ROOT")
-    parser.add_argument("--records_dir_root", type=str, default='/data/hayley-old/tilegene_logs/records',
-                        help="<Optional> Name of the root folder to store 'records'. Default: /data/hayley-old/tilegene_logs/records")
+    parser.add_argument("--out_dir_root", type=str, default='./temp/images',
+                        help="<Optional> Name of the output folder root. Default: ./temp/images")
+    parser.add_argument("--records_dir_root", type=str, default='./temp/records',
+                        help="<Optional> Name of the root folder to store 'records'. Default: ./temp/records")
 
     args = parser.parse_args()
     city = args.city
@@ -309,8 +305,7 @@ if __name__ == "__main__":
     zoom = args.zoom
     network_type = args.network_type
 
-    out_dir_root = args.out_dir_root or DATA_ROOT
-    out_dir_root = Path(out_dir_root)
+    out_dir_root = Path(args.out_dir_root)
     records_dir_root = Path(args.records_dir_root)
 
     print("Args: ", args)
@@ -320,6 +315,8 @@ if __name__ == "__main__":
         style,
         zoom,
         network_type,
+        save=True,
+        verbose=False,
         out_dir_root=out_dir_root,
         records_dir_root=records_dir_root)
 
