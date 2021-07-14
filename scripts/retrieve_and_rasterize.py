@@ -12,19 +12,19 @@
 
 # Examples:
 python retrieve_and_rasterize.py -c la --out_dir_root='.' --records_dir_root='.'
-nohup python retrieve_and_rasterize.py -c la  &>  la.out &
-nohup python retrieve_and_rasterize.py -c shanghai  &>  shanghai.out &
-nohup python retrieve_and_rasterize.py -c seoul  &>  seoul.out &
-nohup python retrieve_and_rasterize.py -c rome  &>  rome.out &
-nohup python retrieve_and_rasterize.py -c paris  &>  paris.out &
-nohup python retrieve_and_rasterize.py -c montreal  &>  montreal.out &
-nohup python retrieve_and_rasterize.py -c manhattan  &>  manhattan.out &
-nohup python retrieve_and_rasterize.py -c chicago  &>  chicago.out &
-nohup python retrieve_and_rasterize.py -c charlotte  &>  charlotte.out &
-nohup python retrieve_and_rasterize.py -c boston  &>  boston.out &
-nohup python retrieve_and_rasterize.py -c berlin  &>  berlin.out &
-nohup python retrieve_and_rasterize.py -c amsterdam  &>  amsterdam.out &
-nohup python retrieve_and_rasterize.py -c vegas  &>  vegas.out &
+nohup python retrieve_and_rasterize.py -c la  &>  log_2021_05_09/la.out &
+nohup python retrieve_and_rasterize.py -c shanghai  &>  log_2021_05_09/shanghai.out &
+nohup python retrieve_and_rasterize.py -c seoul  &>  log_2021_05_09/seoul.out &
+nohup python retrieve_and_rasterize.py -c rome  &>  log_2021_05_09/rome.out &
+nohup python retrieve_and_rasterize.py -c paris  &>  log_2021_05_09/paris.out &
+nohup python retrieve_and_rasterize.py -c montreal  &>  log_2021_05_09/montreal.out &
+nohup python retrieve_and_rasterize.py -c manhattan  &>  log_2021_05_09/manhattan.out &
+nohup python retrieve_and_rasterize.py -c chicago  &>  log_2021_05_09/chicago.out &
+nohup python retrieve_and_rasterize.py -c charlotte  &>  log_2021_05_09/charlotte.out &
+nohup python retrieve_and_rasterize.py -c boston  &>  log_2021_05_09/boston.out &
+nohup python retrieve_and_rasterize.py -c berlin  &>  log_2021_05_09/berlin.out &
+nohup python retrieve_and_rasterize.py -c amsterdam  &>  log_2021_05_09/amsterdam.out &
+nohup python retrieve_and_rasterize.py -c vegas  &>  log_2021_05_09/vegas.out &
 
 
 # nohup python retrieve_and_rasterize.py -c london  &>  london.out &
@@ -52,33 +52,18 @@ nohup python retrieve_and_rasterize.py -c vegas -s StamenTonerBackground &>  veg
 # ## Load libraries
 import argparse
 import os, sys
-import re
-import math
-from datetime import datetime
-from collections import OrderedDict, defaultdict
 import time
 from pathlib import Path
-from typing import List, Set, Dict, Tuple, Optional, Iterable, Mapping, Union, Callable, TypeVar
-from networkx.classes.graph import Graph
+from typing import List, Dict
 
 sys.dont_write_bytecode = True
 
-import pandas as pd
-import geopandas as gpd
 import joblib
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.gridspec import GridSpec
 import matplotlib
 
 matplotlib.use('Agg')
 
-import networkx as nx
-import numpy as np
 import osmnx as ox
-import pandas as pd
-import matplotlib.pyplot as plt
 
 # %matplotlib inline
 ox.config(log_console=False, use_cache=True)
@@ -105,17 +90,15 @@ for p in paths2add:
         print(f"\n{str(p)} added to the path.")
 
 # Import helper functions
-from src.utils.np import info, get_fig, show_npimgs
-from src.utils.geo import getTileFromGeo, getGeoFromTile, getTileExtent, parse_maptile_fp
-from src.utils.misc import mkdir, write_record
+from src.tilemani.utils import parse_maptile_fp
+from src.tilemani.utils import mkdir, write_record
 
-from src.retrieve.retriever import get_road_graph_and_bbox, get_geoms
+from src.tilemani.retrieve.retriever import get_road_graph_and_bbox, get_geoms
 
-from src.rasterize.rasterizer import plot_figure_ground, rasterize_road_graph, rasterize_road_and_bldg
-from src.rasterize.rasterizer import single_rasterize_road_graph, single_rasterize_road_and_bldg
+from src.tilemani.rasterize.rasterizer import rasterize_road_and_bldg
+from src.tilemani.rasterize.rasterizer import single_rasterize_road_and_bldg
 
-from src.compute.features import get_total_area, get_road_area, compute_road_network_stats, \
-    get_road_figure_and_nway_proportion
+from src.tilemani.compute.features import compute_road_network_stats
 
 
 # ### Process each cities' maptiles
