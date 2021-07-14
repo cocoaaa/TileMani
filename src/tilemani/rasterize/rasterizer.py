@@ -1,13 +1,10 @@
-import sys
 from typing import Tuple, List, Dict, Optional
 from pathlib import Path
 import osmnx as ox
-from osmnx.plot import utils_graph, graph, simplification, utils_geo, plot_graph
+from osmnx.plot import utils_graph, plot_graph
 import geopandas as gpd
 from networkx.classes.graph import Graph
 
-from src.retrieve.retriever import get_road_graph_and_bbox
-from src.utils.geo import getGeoFromTile, getTileFromGeo, getTileExtent
 
 def plot_figure_ground(
     G,
@@ -465,4 +462,3 @@ def single_rasterize_road_and_bldg(
                          out_dir_root=out_dir_root,
                          **kwargs)
     return f, ax
-
