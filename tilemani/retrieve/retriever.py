@@ -5,7 +5,7 @@ from networkx.classes.graph import Graph
 from geopandas import GeoDataFrame
 import osmnx as ox
 from osmnx.plot import utils_graph, graph, simplification, utils_geo, plot_graph
-from src.tilemani.utils import getGeoFromTile, getTileFromGeo, getTileExtent, get_latlng_and_radius
+from tilemani.utils.geo import getGeoFromTile, getTileFromGeo, getTileExtent, get_latlng_and_radius
 
 
 def get_road_graph_and_bbox(
