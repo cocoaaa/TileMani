@@ -56,11 +56,8 @@ import time
 from pathlib import Path
 from typing import List, Dict
 
-sys.dont_write_bytecode = True
-
 import joblib
 import matplotlib
-
 matplotlib.use('Agg')
 
 import osmnx as ox
@@ -71,11 +68,12 @@ ox.config(log_console=False, use_cache=True)
 
 
 # ## Set Path
+# TODO: Deal with this in a cleaner way
 # 1. Add project root and src folders to `sys.path`
 # 2. Set DATA_ROOT to `maptile_v2` folder
 this_nb_path = Path(os.getcwd())
 # ROOT = this_nb_path.parent.parent
-ROOT = Path('/data/hayley-old/TileGenerator/')
+ROOT = Path('/data/hayley-old/TileMani/')
 SRC = ROOT / 'src'
 
 DATA_ROOT = Path("/data/hayley-old/maptiles_v2/")
@@ -90,15 +88,15 @@ for p in paths2add:
         print(f"\n{str(p)} added to the path.")
 
 # Import helper functions
-from src.tilemani.utils import parse_maptile_fp
-from src.tilemani.utils import mkdir, write_record
+from tilemani.utils import parse_maptile_fp
+from tilemani.utils import mkdir, write_record
 
-from src.tilemani.retrieve.retriever import get_road_graph_and_bbox, get_geoms
+from tilemani.retrieve.retriever import get_road_graph_and_bbox, get_geoms
 
-from src.tilemani.rasterize.rasterizer import rasterize_road_and_bldg
-from src.tilemani.rasterize.rasterizer import single_rasterize_road_and_bldg
+from tilemani.rasterize.rasterizer import rasterize_road_and_bldg
+from tilemani.rasterize.rasterizer import single_rasterize_road_and_bldg
 
-from src.tilemani.compute.features import compute_road_network_stats
+from tilemani.compute.features import compute_road_network_stats
 
 
 # ### Process each cities' maptiles
