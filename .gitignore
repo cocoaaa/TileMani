@@ -23,6 +23,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# IDEs
+.idea 
 
 # Jupyter Notebook
 .ipynb_checkpoints
