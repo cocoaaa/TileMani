@@ -8,4 +8,9 @@ width, color per road type, building type, green area, etc),
 between centrality, or density-based metrics like FSI, GSI),
 - build/train a model of urban space from graph-, or grid- structured data 
 
+[<img src="media/geoff-boeing-square-mile-street-networks.jpg">](#)
+[<img src="media/geoff-boeing-findings-street-orientations.png">](#)
 
+Reference/Image source:
+
+Boeing, G. (2025). Modeling and Analyzing Urban Networks and Amenities with OSMnx. Geographical Analysis, doi:10.1111/gean.70009
